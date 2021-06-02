@@ -15,8 +15,8 @@ import { io, Socket } from "socket.io-client";
   components: {},
 })
 export default class Present extends Vue {
+  socket: Socket = io("wss://live.sunrin.dev/");
   isPresenting: boolean = false;
-  socket: Socket = io("ws://localhost:3000/");
   stream: any;
   peerConnections: Map<string, RTCPeerConnection> = new Map();
   $refs!: {

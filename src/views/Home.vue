@@ -7,14 +7,13 @@
 <script lang="ts">
 import { Options, Vue } from "vue-class-component";
 import router from "@/router";
-import { io } from "socket.io-client";
-
-const socket = io("ws://localhost:3000/");
+import { io, Socket } from "socket.io-client";
 
 @Options({
   components: {},
 })
 export default class Home extends Vue {
+  socket: Socket = io("wss://live.sunrin.dev/");
   peerConnection!: RTCPeerConnection;
   $refs!: {
     video: HTMLVideoElement;
@@ -27,7 +26,7 @@ export default class Home extends Vue {
       this.$refs.video.srcObject = event.streams[0];
     };
 
-    socket.on("offer", async (id: string, description: RTCSessionDescriptionInit) => {
+    this.socket.on("offer", async (id: string, description: RTCSessionDescriptionInit) => {
       try {
         await this.peerConnection.setRemoteDescription(description);
       } catch (err) {
@@ -38,14 +37,14 @@ export default class Home extends Vue {
         const sdp: RTCSessionDescriptionInit = await this.peerConnection.createAnswer();
         await this.peerConnection.setLocalDescription(sdp);
 
-        socket.emit("answer", id, this.peerConnection.localDescription);
+        this.socket.emit("answer", id, this.peerConnection.localDescription);
       }
 
       this.peerConnection.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
-        if (event.candidate) socket.emit("candidate", id, event.candidate);
+        if (event.candidate) this.socket.emit("candidate", id, event.candidate);
       };
     });
-    socket.on("candidate", async (id: string, candidate: RTCIceCandidateInit) => {
+    this.socket.on("candidate", async (id: string, candidate: RTCIceCandidateInit) => {
       try {
         await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
       } catch (err) {
@@ -53,20 +52,20 @@ export default class Home extends Vue {
       }
     });
 
-    socket.on("connect", () => {
-      socket.emit("watcher");
+    this.socket.on("connect", () => {
+      this.socket.emit("watcher");
     });
 
-    socket.on("presenter", () => {
-      socket.emit("watcher");
+    this.socket.on("presenter", () => {
+      this.socket.emit("watcher");
     });
 
-    socket.on("stop", () => {
+    this.socket.on("stop", () => {
       this.peerConnection.close();
     });
 
     window.onunload = window.onbeforeunload = () => {
-      socket.close();
+      this.socket.close();
       this.peerConnection.close();
     };
   }
