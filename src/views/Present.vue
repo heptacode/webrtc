@@ -15,7 +15,7 @@ import { io, Socket } from "socket.io-client";
   components: {},
 })
 export default class Present extends Vue {
-  socket: Socket = io("wss://live.sunrin.dev/");
+  socket: Socket = io(process.env.NODE_ENV === "production" ? "wss://live.sunrin.dev/" : "ws://10.0.0.226:3000");
   isPresenting: boolean = false;
   stream: any;
   peerConnections: Map<string, RTCPeerConnection> = new Map();
@@ -54,9 +54,14 @@ export default class Present extends Vue {
           if (event.candidate) this.socket.emit("candidate", id, event.candidate);
         };
 
-        const sdp: RTCSessionDescriptionInit = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(sdp);
-        this.socket.emit("offer", id, peerConnection.localDescription);
+        peerConnection.onnegotiationneeded = async (event: Event) => {
+          try {
+            await peerConnection.setLocalDescription(await peerConnection.createOffer());
+            this.socket.emit("offer", id, peerConnection.localDescription);
+          } catch (err) {
+            console.error(err);
+          }
+        };
       });
 
       this.socket.on("answer", async (id: string, description: RTCSessionDescriptionInit) => {
@@ -64,12 +69,16 @@ export default class Present extends Vue {
           const peerConnection = this.peerConnections.get(id)!;
           if (peerConnection.signalingState !== "stable") await peerConnection.setRemoteDescription(description);
         } catch (err) {
-          throw new Error(err);
+          console.error(err);
         }
       });
 
-      this.socket.on("candidate", (id: string, candidate: RTCIceCandidateInit) => {
-        this.peerConnections.get(id)!.addIceCandidate(new RTCIceCandidate(candidate));
+      this.socket.on("candidate", async (id: string, candidate: RTCIceCandidateInit) => {
+        try {
+          await this.peerConnections.get(id)!.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+          console.error(err);
+        }
       });
 
       this.socket.on("disconnectPeer", (id: string) => {

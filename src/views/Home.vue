@@ -13,7 +13,7 @@ import { io, Socket } from "socket.io-client";
   components: {},
 })
 export default class Home extends Vue {
-  socket: Socket = io("wss://live.sunrin.dev/");
+  socket: Socket = io(process.env.NODE_ENV === "production" ? "wss://live.sunrin.dev/" : "ws://10.0.0.226:3000");
   peerConnection!: RTCPeerConnection;
   $refs!: {
     video: HTMLVideoElement;
@@ -26,29 +26,31 @@ export default class Home extends Vue {
       this.$refs.video.srcObject = event.streams[0];
     };
 
+    this.peerConnection.onsignalingstatechange = (event: Event) => {
+      if (this.peerConnection.signalingState === "closed") router.go(0);
+    };
+
     this.socket.on("offer", async (id: string, description: RTCSessionDescriptionInit) => {
       try {
+        if (this.peerConnection.signalingState === "closed") return router.go(0);
         await this.peerConnection.setRemoteDescription(description);
-      } catch (err) {
-        router.go(0);
-      }
-
-      if (this.peerConnection.signalingState !== "stable") {
-        const sdp: RTCSessionDescriptionInit = await this.peerConnection.createAnswer();
-        await this.peerConnection.setLocalDescription(sdp);
-
+        if (["have-remote-offer", "have-local-pranswer"].includes(this.peerConnection.signalingState)) await this.peerConnection.setLocalDescription(await this.peerConnection.createAnswer());
         this.socket.emit("answer", id, this.peerConnection.localDescription);
-      }
 
-      this.peerConnection.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
-        if (event.candidate) this.socket.emit("candidate", id, event.candidate);
-      };
+        this.peerConnection.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+          if (event.candidate) this.socket.emit("candidate", id, event.candidate);
+        };
+      } catch (err) {
+        console.error(err);
+      }
     });
+
     this.socket.on("candidate", async (id: string, candidate: RTCIceCandidateInit) => {
+      if (this.peerConnection.signalingState === "closed") return router.go(0);
       try {
         await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
       } catch (err) {
-        throw new Error(err);
+        console.error(err);
       }
     });
 
