@@ -15,7 +15,7 @@ import { io, Socket } from "socket.io-client";
   components: {},
 })
 export default class Present extends Vue {
-  socket: Socket = io(process.env.NODE_ENV === "production" ? "wss://live.sunrin.dev/" : "ws://10.0.0.226:3000");
+  socket: Socket = io(process.env.NODE_ENV === "production" ? "wss://webrtc.hyunwoo.dev/" : "ws://10.0.0.226:3000");
   isPresenting: boolean = false;
   stream: any;
   peerConnections: Map<string, RTCPeerConnection> = new Map();
